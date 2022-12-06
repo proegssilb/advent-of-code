@@ -12,7 +12,12 @@ pub fn input_generator(input: &str) -> Vec<DataLine> {
         let (s1, rest) = line.split_once('-').unwrap();
         let (e1, rest) = rest.split_once(',').unwrap();
         let (s2, e2) = rest.split_once('-').unwrap();
-        results.push((s1.parse().unwrap(), e1.parse().unwrap(), s2.parse().unwrap(), e2.parse().unwrap()))
+        results.push((
+            s1.parse().unwrap(),
+            e1.parse().unwrap(),
+            s2.parse().unwrap(),
+            e2.parse().unwrap(),
+        ))
     }
     results
 }
@@ -33,17 +38,10 @@ fn range_overlaps(dl: &DataLine) -> i32 {
 
 #[aoc(day4, part1)]
 pub fn solve_part1(input: &[DataLine]) -> i32 {
-    input
-        .iter()
-        .map(range_either_contains)
-        .sum()
+    input.iter().map(range_either_contains).sum()
 }
 
 #[aoc(day4, part2)]
 pub fn solve_part2(input: &[DataLine]) -> i32 {
-    input
-        .iter()
-        .map(range_overlaps)
-        .sum()
+    input.iter().map(range_overlaps).sum()
 }
-
