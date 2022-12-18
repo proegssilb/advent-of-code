@@ -3,26 +3,32 @@ use bit_set::*;
 use itertools::Itertools;
 use std::cmp::max;
 use std::collections::HashMap;
-use std::collections::{HashSet, VecDeque};
-use std::iter::Map;
+use std::collections::VecDeque;
+use std::fmt::Debug;
 
 use petgraph::algo::dijkstra;
 use petgraph::graph::NodeIndex;
 use petgraph::{Graph, Undirected};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NodeData {
     valve_id: String,
     flow_rate: i64,
-    cost: i64,
+    enable_cost: i64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EdgeData {
-    cost: i64,
+    travel_cost: i64,
+    skipped_rooms: Vec<String>,
 }
 
-pub type GenData = Graph<NodeData, EdgeData, Undirected>;
+type GraphData = Graph<NodeData, EdgeData, Undirected>;
+
+pub struct GenData {
+    graph: GraphData,
+    start_node: NodeIndex,
+}
 pub type InData<'a> = &'a GenData;
 pub type OutData = i64;
 
@@ -30,7 +36,7 @@ pub type OutData = i64;
 
 #[aoc_generator(day16)]
 pub fn input_generator(input: &str) -> GenData {
-    let mut results: GenData = Graph::default();
+    let mut results: GraphData = Graph::default();
     let mut nodes: HashMap<&str, NodeIndex> = HashMap::new();
 
     for ln in input.lines() {
@@ -49,7 +55,7 @@ pub fn input_generator(input: &str) -> GenData {
         let node = NodeData {
             valve_id: valve_id.to_owned(),
             flow_rate: rate.parse().unwrap(),
-            cost: 1,
+            enable_cost: 1,
         };
 
         let idx = results.add_node(node);
@@ -62,13 +68,64 @@ pub fn input_generator(input: &str) -> GenData {
                     continue;
                 }
                 Some(index) => {
-                    results.add_edge(idx, *index, EdgeData { cost: 1 });
+                    results.add_edge(idx, *index, EdgeData { travel_cost: 1, skipped_rooms: vec![] });
                 }
             }
         }
     }
 
-    results
+    // Post-process the graph. Remove nodes with 0 flow, etc.
+    // 
+    // (Ideally, you'd want to do all this while building the graph, but 
+    //    the nodes don't all exist while building the graph. That makes 
+    //    this work harder.)
+    for n_idx in nodes.values() {
+        let n_data = results.node_weight(*n_idx).unwrap();
+        if n_data.flow_rate != 0 { continue; }
+
+        let n_data = n_data.clone();
+        let neighbors = results.neighbors(*n_idx).collect_vec();
+        for (i, n_src) in neighbors.iter().enumerate() {
+            for n_dst in neighbors.iter().skip(i) {
+                let s_edge = results.find_edge(*n_src, *n_idx).unwrap();
+                let s_data = results.edge_weight(s_edge).unwrap().to_owned();
+                let d_edge = results.find_edge(*n_idx, *n_dst).unwrap();
+                let d_data = results.edge_weight(d_edge).unwrap().to_owned();
+
+                let mut path: Vec<String> = Vec::new();
+                path.extend(s_data.skipped_rooms);
+                path.push(n_data.valve_id.clone());
+                path.extend(d_data.skipped_rooms);
+
+                results.add_edge(*n_src, *n_dst, EdgeData { 
+                    travel_cost: s_data.travel_cost + d_data.travel_cost, 
+                    skipped_rooms: path,
+                });
+            }
+        }
+
+        for neighbor in neighbors {
+            if let Some(e_idx) = results.find_edge(*n_idx, neighbor)
+            {
+                results.remove_edge(e_idx);
+            }
+        }
+
+        results.remove_node(*n_idx);
+    }
+
+    // Fill in missing links
+    for n_idx in nodes.values() {
+        let report = dijkstra(&results, *n_idx, None, |edge_ref| edge_ref.weight().travel_cost);
+
+        for (t_idx, _travel_cost) in report {
+            if results.contains_edge(*n_idx, t_idx) { continue; }
+
+            todo!();
+        }
+    }
+
+    GenData { graph: results, start_node: nodes["AA"] }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -94,28 +151,16 @@ impl PartialOrd for VisitData {
     }
 }
 
-type NodeDistanceMap = HashMap<NodeIndex, HashMap<NodeIndex, i64>>;
-
 #[aoc(day16, part1, bfs)]
-pub fn solve_part1_bfs(graph: InData) -> OutData {
-    let start_node_idx = graph
-        .node_indices()
-        .map(|idx| (idx, graph.node_weight(idx).unwrap()))
-        .filter(|(_, weight)| weight.valve_id == "AA")
-        .map(|(idx, _)| idx)
-        .at_most_one()
-        .unwrap()
-        .unwrap();
+pub fn solve_part1_bfs(input: InData) -> OutData {
+    let GenData {
+        graph,
+        start_node: start_node_idx
+    } = input;
+    let start_node_idx = *start_node_idx;
 
     let mut work_queue: VecDeque<VisitData> = VecDeque::new();
     let max_valves = graph.node_count();
-
-    let mut node_options_map: NodeDistanceMap = HashMap::new();
-
-    for idx in graph.node_indices() {
-        let results = dijkstra(&graph, idx, None, |e| e.weight().cost);
-        node_options_map.entry(idx).or_insert(results);
-    }
 
     work_queue.push_back(VisitData {
         node_index: start_node_idx,
@@ -139,18 +184,18 @@ pub fn solve_part1_bfs(graph: InData) -> OutData {
         // let c_node = graph.node_weight(c_visit.node_index).unwrap();
         // println!("    Visiting node: {:?} - {:?} ({: >3}m, {: >7}pts )  \t-\t[{:?}]", c_visit.node_index, c_node.valve_id, c_visit.time_remaining, c_visit.current_score, &c_visit.path_valves);
 
-        let neighbors = node_options_map[&c_visit.node_index]
-            .keys()
+        let neighbors = graph.neighbors(c_visit.node_index)
             .filter(|idx| !c_visit.nodes_on.contains(idx.index()))
-            .filter(|idx| graph.node_weight(**idx).unwrap().flow_rate != 0)
-            .map(|i| *i);
+            .filter(|idx| graph.node_weight(*idx).unwrap().flow_rate != 0);
 
         for n_idx in neighbors {
             let n_data = graph.node_weight(n_idx).unwrap();
-            let route_cost = node_options_map[&c_visit.node_index][&n_idx];
+            let e_idx = graph.find_edge(c_visit.node_index, n_idx).unwrap();
+            let e_data = graph.edge_weight(e_idx).unwrap();
+            let route_cost = e_data.travel_cost + n_data.enable_cost;
 
-            if c_visit.time_remaining as i64 >= 1 + route_cost {
-                let new_time = c_visit.time_remaining as i64 - route_cost - 1;
+            if c_visit.time_remaining as i64 >= route_cost {
+                let new_time = c_visit.time_remaining as i64 - route_cost;
                 let new_score = c_visit.current_score + n_data.flow_rate * (new_time as i64);
                 let mut new_nodes_on = c_visit.nodes_on.clone();
                 new_nodes_on.insert(n_idx.index());
@@ -180,6 +225,7 @@ struct VisitData2 {
     nodes_on: BitSet,
     current_score: i64,
     time_remaining: u8,
+    path: HashMap<u8, Vec<(usize, String)>>,
 }
 
 impl VisitData2 {
@@ -195,24 +241,35 @@ impl VisitData2 {
     }
 }
 
-fn get_node_targets<'a>(graph: &'a GenData, nodes_on: &'a BitSet) -> impl Iterator<Item = NodeIndex> + 'a
+// impl Debug for VisitData2 {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        
+//     }
+// }
+
+fn get_node_targets<'a>(graph: &'a GraphData, nodes_on: &'a BitSet) -> impl Iterator<Item = NodeIndex> + 'a
 {
     graph.node_indices()
         .filter(move |idx| !nodes_on.contains(idx.index()))
         .filter(|idx| graph.node_weight(*idx).unwrap().flow_rate != 0)
 }
 
-fn actor_can_reach(node_map: &NodeDistanceMap, actor_eta: u8, c_idx: NodeIndex, t_idx: NodeIndex) -> bool {
-    node_map[&c_idx][&t_idx] + 1 < actor_eta as i64
+fn actor_can_reach(graph: &GraphData, time_left: u8, source: NodeIndex, dest: NodeIndex) -> bool {
+    route_cost(graph, source, dest) < time_left as i64
 }
 
-fn get_next_visit(graph: &GenData, node_map: &NodeDistanceMap, c_visit: &VisitData2, which_actor: usize, n_idx: NodeIndex) -> VisitData2 {
+fn route_cost(graph: &GraphData, source: NodeIndex, dest: NodeIndex) -> i64 {
+    let n_data = graph.node_weight(dest).unwrap();
+    let e_idx = graph.find_edge(source, dest).unwrap();
+    let e_data = graph.edge_weight(e_idx).unwrap();
+    n_data.enable_cost + e_data.travel_cost
+}
+
+fn get_next_visit(graph: &GraphData, c_visit: &VisitData2, which_actor: usize, n_idx: NodeIndex) -> VisitData2 {
     let c_idx = c_visit.idx[which_actor];
     let n_data = graph.node_weight(n_idx).unwrap();
-    let route_cost = node_map[&c_idx][&n_idx] + 1;
+    let route_cost = route_cost(graph, c_idx, n_idx);
     
-    let new_time = c_visit.time_remaining as i64 - route_cost;
-    let new_score = c_visit.current_score + n_data.flow_rate * (new_time as i64);
     let mut new_nodes_on = c_visit.nodes_on.clone();
     new_nodes_on.insert(n_idx.index());
     let new_idx = match which_actor {
@@ -225,64 +282,70 @@ fn get_next_visit(graph: &GenData, node_map: &NodeDistanceMap, c_visit: &VisitDa
         1 => [c_visit.eta[0], c_visit.eta[1] - route_cost as u8],
         _ => panic!("This shouldn't happen."),
     };
+    let new_time = *new_eta.iter().max().unwrap();
+    let new_score = c_visit.current_score + n_data.flow_rate * (new_time as i64);
 
-    let move_and_on_data = VisitData2 {
+    // The next node that we're targeting might not be the next one in time (see `new_time`)
+    let mut new_path = c_visit.path.clone();
+    let path_which = (new_eta[1] == new_time) as usize;
+    let path_label = graph.node_weight(new_idx[path_which]).unwrap().valve_id.clone();
+    new_path.insert(new_time, vec![(path_which, path_label)]);
+
+    // We can finally return our result
+    VisitData2 {
         idx: new_idx,
         eta: new_eta,
         nodes_on: new_nodes_on,
         current_score: new_score,
-        time_remaining: new_time as u8,
-    };
-
-    move_and_on_data
+        time_remaining: new_time,
+        path: new_path,
+    }
 }
 
-fn get_next_visit2(graph: &GenData, node_map: &NodeDistanceMap, c_visit: &VisitData2, z_idx: NodeIndex, o_idx: NodeIndex) -> VisitData2 {
+fn get_next_visit2(graph: &GraphData, c_visit: &VisitData2, z_idx: NodeIndex, o_idx: NodeIndex) -> VisitData2 {
     let [z_c_idx, o_c_idx] = c_visit.idx;
-    let z_data = graph.node_weight(z_idx).unwrap();
-    let o_data = graph.node_weight(o_idx).unwrap();
-    let z_route_cost = node_map[&z_c_idx][&z_idx] + 1;
-    let o_route_cost = node_map[&o_c_idx][&o_idx] + 1;
+    let z_n_data = graph.node_weight(z_idx).unwrap();
+    let o_n_data = graph.node_weight(o_idx).unwrap();
+    let z_route_cost = route_cost(graph, z_c_idx, z_idx);
+    let o_route_cost = route_cost(graph, o_c_idx, o_idx);
     
     let new_eta = [c_visit.eta[0] - z_route_cost as u8, c_visit.eta[1] - o_route_cost as u8];
     let new_time = c_visit.time_remaining as i64 - *new_eta.iter().min().unwrap() as i64;
-    let new_score = c_visit.current_score + z_data.flow_rate * (new_eta[0] as i64) + o_data.flow_rate * (new_eta[1] as i64);
+    let new_score = c_visit.current_score + z_n_data.flow_rate * (new_eta[0] as i64) + o_n_data.flow_rate * (new_eta[1] as i64);
     let mut new_nodes_on = c_visit.nodes_on.clone();
     new_nodes_on.insert(z_idx.index());
     new_nodes_on.insert(o_idx.index());
     let new_idx = [z_idx, o_idx];
 
-    let move_and_on_data = VisitData2 {
+    // Our next path segment needs to reflect which actors are actually going to be acting in that time.
+    let new_val_iter = new_idx.iter()
+        .enumerate()
+        .map(|(i, idx)| (i, graph.node_weight(*idx).unwrap().valve_id.clone()))
+        .filter(|(i, _)| new_eta[*i] as i64 == new_time);
+    let mut new_path = c_visit.path.clone();
+    new_path.insert(new_time as u8, new_val_iter.collect());
+
+    // ...and return
+    VisitData2 {
         idx: new_idx,
         eta: new_eta,
         nodes_on: new_nodes_on,
         current_score: new_score,
         time_remaining: new_time as u8,
-    };
-
-    move_and_on_data
+        path: new_path,
+    }
 }
 
 #[aoc(day16, part2)]
-pub fn solve_part2(graph: InData) -> OutData {
-    let start_node_idx = graph
-        .node_indices()
-        .map(|idx| (idx, graph.node_weight(idx).unwrap()))
-        .filter(|(_, weight)| weight.valve_id == "AA")
-        .map(|(idx, _)| idx)
-        .at_most_one()
-        .unwrap()
-        .unwrap();
+pub fn solve_part2(input: InData) -> OutData {
+    let GenData {
+        graph,
+        start_node: start_node_idx
+    } = input;
+    let start_node_idx = *start_node_idx;
 
     let mut work_queue: VecDeque<VisitData2> = VecDeque::new();
     let max_valves = graph.node_count();
-
-    let mut node_options_map: NodeDistanceMap = HashMap::new();
-
-    for idx in graph.node_indices() {
-        let results = dijkstra(&graph, idx, None, |e| e.weight().cost);
-        node_options_map.entry(idx).or_insert(results);
-    }
 
     // dbg!(&node_options_map);
 
@@ -292,6 +355,7 @@ pub fn solve_part2(graph: InData) -> OutData {
         nodes_on: BitSet::with_capacity(graph.node_count()),
         current_score: 0,
         time_remaining: 26,
+        path: [(26, vec![(0, "AA".to_string()), (1, "AA".to_string())])].iter().cloned().collect(),
     });
 
     let mut max_score: i64 = 0;
@@ -317,9 +381,10 @@ pub fn solve_part2(graph: InData) -> OutData {
             },
             1 => {
                 let which = c_visit.which_ready().unwrap();
+
                 for t in get_node_targets(graph, &c_visit.nodes_on) {
-                    if actor_can_reach(&node_options_map, c_visit.eta[which], c_visit.idx[which], t)  {
-                        let n_visit = get_next_visit(graph, &node_options_map, &c_visit, which, t);
+                    if actor_can_reach(graph, c_visit.eta[which], c_visit.idx[which], t)  {
+                        let n_visit = get_next_visit(graph, &c_visit, which, t);
                         work_queue.push_back(n_visit);
                     }
                 }
@@ -327,8 +392,8 @@ pub fn solve_part2(graph: InData) -> OutData {
             },
             2 => {
                 let targets: BitSet = get_node_targets(graph, &c_visit.nodes_on).map(|ni| ni.index()).collect();
-                let mut zero_targets: BitSet = targets.iter().filter(|t| actor_can_reach(&node_options_map, c_visit.eta[0], c_visit.idx[0], NodeIndex::new(*t))).collect();
-                let mut one_targets: BitSet = targets.iter().filter(|t| actor_can_reach(&node_options_map, c_visit.eta[1], c_visit.idx[1], NodeIndex::new(*t))).collect();
+                let mut zero_targets: BitSet = targets.iter().filter(|t| actor_can_reach(graph, c_visit.eta[0], c_visit.idx[0], NodeIndex::new(*t))).collect();
+                let mut one_targets: BitSet = targets.iter().filter(|t| actor_can_reach(graph, c_visit.eta[1], c_visit.idx[1], NodeIndex::new(*t))).collect();
                 let common_targets = zero_targets.intersection(&one_targets).collect();
                 zero_targets.difference_with(&common_targets);
                 one_targets.difference_with(&common_targets);
@@ -340,7 +405,7 @@ pub fn solve_part2(graph: InData) -> OutData {
                         for o_choice in one_rest.clone() {
                             let z_idx = NodeIndex::new(z_choice);
                             let o_idx = NodeIndex::new(o_choice);
-                            let nv = get_next_visit2(graph, &node_options_map, &c_visit, z_idx, o_idx);
+                            let nv = get_next_visit2(graph, &c_visit, z_idx, o_idx);
                             work_queue.push_back(nv);
                         }
                     }
@@ -353,7 +418,7 @@ pub fn solve_part2(graph: InData) -> OutData {
                         for o_choice in &one_targets {
                             let z_idx = NodeIndex::new(z_choice);
                             let o_idx = NodeIndex::new(o_choice);
-                            let nv = get_next_visit2(graph, &node_options_map, &c_visit, z_idx, o_idx);
+                            let nv = get_next_visit2(graph, &c_visit, z_idx, o_idx);
                             work_queue.push_back(nv);
                         }
                     }
@@ -364,7 +429,7 @@ pub fn solve_part2(graph: InData) -> OutData {
                     let [z_choice, o_choice] = combo[..] else { todo!() };
                     let z_idx = NodeIndex::new(z_choice);
                     let o_idx = NodeIndex::new(o_choice);
-                    let nv = get_next_visit2(graph, &node_options_map, &c_visit, z_idx, o_idx);
+                    let nv = get_next_visit2(graph, &c_visit, z_idx, o_idx);
                     work_queue.push_back(nv);
                 }
             },
