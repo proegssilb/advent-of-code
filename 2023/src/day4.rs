@@ -151,11 +151,10 @@ pub mod solutions {
 
             if w_set_count > 0 {
                 let stop = min(idx + w_set_count, lines.len() - 1);
+                let count = card_count[idx];
 
-                for _ in 0..card_count[idx] {
-                    for i in idx + 1..=stop {
-                        card_count[i] += 1;
-                    }
+                for i in idx + 1..=stop {
+                    card_count[i] += count;
                 }
             }
 
