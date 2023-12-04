@@ -29,12 +29,56 @@ pub mod solutions {
                 continue;
             }
             let w_points = 2i32.pow(w_set_count - 1);
-            //println!("Line worth {} points (count {}): {} ({:?}, {:?}", w_points, w_set_count, line, a_set, b_set);
+
             tally += w_points as u32;
         }
 
         tally
     }
+
+    #[solution(part1, bitmangle)]
+    pub fn part1_bitmangle(input: &str) -> u32 {
+        let mut tally = 0;
+        for line in input.lines() {
+            let (_, ln) = line.split_once(':').expect("No colon found.");
+            let (a, b) = ln.split_once('|').expect("line did not contain a pipe.");
+            let a_set = a
+                .split_whitespace()
+                .filter(|s| s.len() > 0)
+                .map(|s| match s.as_bytes() {
+                    [a, b] => { (a & 0x0f) * 10 + (b & 0x0f) }
+                    [ a ] => { a & 0x0f }
+                    _ => { unreachable!() }
+                })
+                .fold(0u128, |bitset, val| bitset | (1 << val));
+            let b_set = b
+                .split(' ')
+                .filter(|s| s.len() > 0)
+                .map(|s| match s.as_bytes() {
+                    [a, b] => { (a & 0x0f) * 10 + (b & 0x0f) }
+                    [ a ] => { a & 0x0f }
+                    _ => { unreachable!() }
+                })
+                .fold(0u128, |bitset, val| bitset | (1 << val));
+            let w_set_count = (a_set & b_set).count_ones() as u32;
+            if w_set_count == 0 {
+                continue;
+            }
+            let w_points = 2i32.pow(w_set_count - 1);
+
+            tally += w_points as u32;
+        }
+
+        tally
+    }
+
+    /*
+        TODO:
+            - Swap Hashset for a u128
+                - Each "number" takes up 2 characters. Use the lower 4 bits of each number (multiply by 10, don't bitshift).
+                - With each number now a single byte, cast to usize and index into bitset.
+            - SIMD ????
+     */
 
     // ----------------------- Part 2 -----------------------
 
@@ -42,18 +86,18 @@ pub mod solutions {
     pub fn part2_draft(input: &str) -> u32 {
         let mut tally = 0;
         let lines: Vec<&str> = input.lines().collect();
-        let mut card_count = vec![1; lines.len()];
+        let mut card_count = [1; 300];
 
         for (idx, line) in lines.iter().enumerate() {
             let (_, ln) = line.split_once(':').expect("No colon found.");
             let (a, b) = ln.split_once('|').expect("line did not contain a pipe.");
             let a_set = a
-                .split(' ')
+                .split_whitespace()
                 .filter(|s| s.len() > 0)
                 .map(|s| s.parse::<u8>().expect(&format!("Could not parse: '{}'", s)))
                 .collect::<HashSet<u8>>();
             let b_set = b
-                .split(' ')
+                .split_whitespace()
                 .filter(|s| s.len() > 0)
                 .map(|s| s.parse::<u8>().unwrap())
                 .collect::<HashSet<u8>>();
@@ -62,12 +106,6 @@ pub mod solutions {
             if w_set_count > 0 {
                 let stop = min(idx + w_set_count, card_count.len() - 1);
 
-                // println!(
-                //     "Line {} incrementing Line {} to {}",
-                //     idx,
-                //     idx + 1,
-                //     stop
-                // );
                 for _ in 0..card_count[idx] {
                     for i in idx + 1..=stop {
                         card_count[i] += 1;
@@ -75,10 +113,51 @@ pub mod solutions {
                 }
             }
 
-            // println!(
-            //     "Line {} counted {} times ({} matches): {} ({:?}, {:?}",
-            //     idx, card_count[idx], w_set_count, line, a_set, b_set
-            // );
+            tally += card_count[idx];
+        }
+
+        tally
+    }
+
+    #[solution(part2, bitmangle)]
+    pub fn part2_bitmangle(input: &str) -> u32 {
+        let mut tally = 0;
+        let lines: Vec<&str> = input.lines().collect();
+        let mut card_count = vec![1; lines.len()];
+        let skip = lines[0].find(':').expect("No colon found.") + 2;
+
+        for (idx, line) in lines.iter().enumerate() {
+            let (a, b) = line[skip..].split_once('|').expect("line did not contain a pipe.");
+            let a_set = a
+                .split(' ')
+                .filter(|s| s.len() > 0)
+                .map(|s| match s.as_bytes() {
+                    [a, b] => { (a & 0x0f) * 10 + (b & 0x0f) }
+                    [ a ] => { a & 0x0f }
+                    _ => { unreachable!() }
+                })
+                .fold(0u128, |bitset, val| bitset | (1 << val));
+            let b_set = b
+                .split(' ')
+                .filter(|s| s.len() > 0)
+                .map(|s| match s.as_bytes() {
+                    [a, b] => { (a & 0x0f) * 10 + (b & 0x0f) }
+                    [ a ] => { a & 0x0f }
+                    _ => { unreachable!() }
+                })
+                .fold(0u128, |bitset, val| bitset | (1 << val));
+            let w_set_count = (a_set & b_set).count_ones() as usize;
+
+            if w_set_count > 0 {
+                let stop = min(idx + w_set_count, lines.len() - 1);
+
+                for _ in 0..card_count[idx] {
+                    for i in idx + 1..=stop {
+                        card_count[i] += 1;
+                    }
+                }
+            }
+
             tally += card_count[idx];
         }
 
