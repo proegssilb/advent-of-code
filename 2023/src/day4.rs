@@ -86,7 +86,8 @@ pub mod solutions {
     pub fn part2_draft(input: &str) -> u32 {
         let mut tally = 0;
         let lines: Vec<&str> = input.lines().collect();
-        let mut card_count = [1; 300];
+        let mut card_count = vec![1; lines.len()];
+        
 
         for (idx, line) in lines.iter().enumerate() {
             let (_, ln) = line.split_once(':').expect("No colon found.");
@@ -123,7 +124,7 @@ pub mod solutions {
     pub fn part2_bitmangle(input: &str) -> u32 {
         let mut tally = 0;
         let lines: Vec<&str> = input.lines().collect();
-        let mut card_count = vec![1; lines.len()];
+        let mut card_count = [1; 300];
         let skip = lines[0].find(':').expect("No colon found.") + 2;
 
         for (idx, line) in lines.iter().enumerate() {
