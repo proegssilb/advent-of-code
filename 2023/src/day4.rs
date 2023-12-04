@@ -163,12 +163,54 @@ pub mod solutions {
 
         tally
     }
+
+    #[solution(part2, peek_bits)]
+    pub fn part2_peek_bits(input: &str) -> u32 {
+        let mut tally = 0;
+        let mut lines = input.lines().peekable();
+        let mut card_count = [1; 400];
+        let skip = lines.peek().expect("Couldn't find first line.").find(':').expect("No colon found.") + 2;
+
+        for (idx, line) in lines.enumerate() {
+            let (a, b) = line[skip..].split_once('|').expect("line did not contain a pipe.");
+            let a_set = a
+                .split_whitespace()
+                .filter(|s| s.len() > 0)
+                .map(|s| match s.as_bytes() {
+                    [a, b] => { (a & 0x0f) * 10 + (b & 0x0f) }
+                    [ a ] => { a & 0x0f }
+                    _ => { unreachable!() }
+                })
+                .fold(0u128, |bitset, val| bitset | (1 << val));
+            let b_set = b
+                .split_whitespace()
+                .filter(|s| s.len() > 0)
+                .map(|s| match s.as_bytes() {
+                    [a, b] => { (a & 0x0f) * 10 + (b & 0x0f) }
+                    [ a ] => { a & 0x0f }
+                    _ => { unreachable!() }
+                })
+                .fold(0u128, |bitset, val| bitset | (1 << val));
+            let w_set_count = (a_set & b_set).count_ones() as usize;
+
+            if w_set_count > 0 {
+                let stop = idx + w_set_count;
+                let count = card_count[idx];
+
+                for i in idx + 1..=stop {
+                    card_count[i] += count;
+                }
+            }
+
+            tally += card_count[idx];
+        }
+
+        tally
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::solutions::*;
-    use super::*;
     use aoc_zen_runner_macros::aoc_case;
 
     #[aoc_case(13, 30)]
