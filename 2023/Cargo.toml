@@ -40,6 +40,10 @@ path = "src/day8.rs"
 name = "2023-day9"
 path = "src/day9.rs"
 
+[[bin]]
+name = "2023-day10"
+path = "src/day10.rs"
+
 [dependencies]
 aoc-zen-runner-macros = "0.1.0"
 microbench = "0.5.0"
@@ -54,6 +58,9 @@ gridly = "0.9.0"
 test-case = "3.3.1"
 itertools = "0.12.0"
 num = "0.4.1"
+grid = "0.12.0"
+pathfinding = "4.4.0"
+colored = "2.1.0"
 
 [profile.release]
 debug = true
