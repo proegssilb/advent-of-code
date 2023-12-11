@@ -44,6 +44,10 @@ path = "src/day9.rs"
 name = "2023-day10"
 path = "src/day10.rs"
 
+[[bin]]
+name = "2023-day11"
+path = "src/day11.rs"
+
 [dependencies]
 aoc-zen-runner-macros = "0.1.0"
 microbench = "0.5.0"

@@ -150,15 +150,6 @@ pub mod solutions {
         let Input { start_loc, pipes: mut grid } = input;
         fix_start_loc(&start_loc, &mut grid);
         flood_fill_loop(&start_loc, &mut grid);
-        // for r in grid.iter_rows() {
-        //     print!("Marked map:");
-        //     let mut has_loop = false;
-        //     for gn in r {
-        //         has_loop = has_loop || gn.is_loop;
-        //         print!("{}", gn);
-        //     }
-        //     println!(" (has loop: {})", has_loop);
-        // }
 
         let mut tally = 0;
         for r in grid.iter_rows() {
