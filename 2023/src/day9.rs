@@ -5,11 +5,6 @@ use itertools::Itertools;
 pub mod solutions {
     use super::*;
 
-    // #[generator(gen)]
-    // pub fn input_generator(input: &str) -> Vec<i32> {
-    //     Vec::new()
-    // }
-
     pub fn extend_series_once(series: &mut impl Iterator<Item = i64>) -> i64 {
         // Returns the next item in the series we're iterating over.
         // DO NOT RETURN THE DELTA.
@@ -33,32 +28,6 @@ pub mod solutions {
             extend_series_once(&mut series_diffs.into_iter()) + last
         }
     }
-
-    // pub fn extend_series_mut(series: &mut &[i64]) -> i64 {
-    //     // Returns the next item in the series we're iterating over.
-    //     // DO NOT RETURN THE DELTA.
-    //     let first = series[0];
-    //     let mut all_zero = true;
-    //     let mut last = first;
-
-    //     for (idx, i) in &series[1..].iter_mut().enumerate() {
-            
-    //     }
-    //         // .scan(first, |prev, curr| {
-    //         //     let diff = curr - *prev;
-    //         //     *prev = curr;
-    //         //     last = curr;
-    //         //     all_zero = all_zero && (diff == 0);
-    //         //     Some(diff)
-    //         // })
-    //         // .collect_vec();
-
-    //     if all_zero {
-    //         last
-    //     } else {
-    //         extend_series_mut(&mut series_diffs.into_iter()) + last
-    //     }
-    // }
 
     // ----------------------- Part 1 -----------------------
     #[solution(part1, draft_soln)]
