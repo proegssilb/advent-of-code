@@ -64,6 +64,26 @@ path = "src/day14.rs"
 name = "2023-day15"
 path = "src/day15.rs"
 
+[[bin]]
+name = "2023-day16"
+path = "src/day16.rs"
+
+[[bin]]
+name = "2023-day17"
+path = "src/day17.rs"
+
+[[bin]]
+name = "2023-day20"
+path = "src/day20.rs"
+
+[[bin]]
+name = "2023-day21"
+path = "src/day21.rs"
+
+[[bin]]
+name = "2023-day25"
+path = "src/day25.rs"
+
 [dependencies]
 aoc-zen-runner-macros = "0.1.0"
 microbench = "0.5.0"

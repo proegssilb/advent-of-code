@@ -1,4 +1,4 @@
 [workspace]
 resolver = "2"
 
-members = [ "2022" , "2023"]
+members = [ "2022" , "2023", "2024"]
