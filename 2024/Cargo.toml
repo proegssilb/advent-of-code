@@ -8,6 +8,10 @@ edition = "2021"
 name = "day1"
 path = "src/day1.rs"
 
+[[bin]]
+name = "2024-day2"
+path = "src/day2.rs"
+
 [dependencies]
 aoc-zen-runner-macros = "0.1.0"
 microbench = "0.5.0"
