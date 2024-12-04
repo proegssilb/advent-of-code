@@ -12,8 +12,13 @@ path = "src/day1.rs"
 name = "2024-day2"
 path = "src/day2.rs"
 
+[[bin]]
+name = "2024-day3"
+path = "src/day3.rs"
+
 [dependencies]
 aoc-zen-runner-macros = "0.1.0"
 microbench = "0.5.0"
 criterion = "0.5.1"
 pprof = { version = "0.13.0", features = ["flamegraph", "protobuf", "criterion"] }
+regex = "1.11.1"
